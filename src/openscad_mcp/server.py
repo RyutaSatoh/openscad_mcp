@@ -62,11 +62,19 @@ def render_views(scad_code: str) -> str:
     # Right: Looking X. rot=(90, 0, 90)
     # Iso: Diagonal. rot=(60, 0, 45)
     
+    # Restore 4-view layout with corrected rotations and orthographic projection
+    # Top: 0,0,0
+    # Front: 90,0,0
+    # Right: 90,0,90
+    # Iso: 60,0,45
+    
+    common_args = ["--projection=o", "--viewall", "--autocenter"]
+    
     views = [
-        ("Top",   ["--camera=0,0,0,0,0,0", "--viewall", "--autocenter"]),
-        ("Front", ["--camera=0,0,0,90,0,0", "--viewall", "--autocenter"]),
-        ("Right", ["--camera=0,0,0,90,0,90", "--viewall", "--autocenter"]),
-        ("Iso",   ["--camera=0,0,0,60,0,45", "--viewall", "--autocenter"]),
+        ("Top",   [f"--camera=0,0,0,0,0,0,0"] + common_args),
+        ("Front", [f"--camera=0,0,0,90,0,0,0"] + common_args),
+        ("Right", [f"--camera=0,0,0,90,0,90,0"] + common_args),
+        ("Iso",   [f"--camera=0,0,0,60,0,45,0"] + common_args),
     ]
     
     images = []
@@ -79,7 +87,6 @@ def render_views(scad_code: str) -> str:
             
             # Add label
             draw = ImageDraw.Draw(img)
-            # Try to load a default font, otherwise default
             try:
                 font = ImageFont.truetype("DejaVuSans.ttf", 20)
             except IOError:
@@ -89,8 +96,6 @@ def render_views(scad_code: str) -> str:
             images.append(img)
             
         # Combine images into a 2x2 grid
-        # Top-Left: Top, Top-Right: Front
-        # Bot-Left: Right, Bot-Right: Iso
         w, h = images[0].size
         grid_img = Image.new('RGB', (w * 2, h * 2))
         
