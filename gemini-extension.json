@@ -1,0 +1,18 @@
+{
+  "id": "openscad-mcp",
+  "name": "openscad-mcp",
+  "version": "0.1.0",
+  "description": "OpenSCAD modeling and rendering tools",
+  "mcpServers": {
+    "openscad": {
+      "command": "/home/mariryu/src/openscad_mpc/.venv/bin/python",
+      "args": [
+        "/home/mariryu/src/openscad_mpc/src/openscad_mcp/server.py"
+      ],
+      "env": {
+        "DISPLAY": ":0",
+        "PATH": "/usr/bin:/bin"
+      }
+    }
+  }
+}

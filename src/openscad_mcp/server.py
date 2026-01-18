@@ -5,7 +5,6 @@ import os
 import sys
 from PIL import Image, ImageDraw, ImageFont
 import io
-import base64
 
 mcp = FastMCP("openscad-mcp")
 
@@ -31,8 +30,10 @@ def run_openscad(scad_code: str, output_extension: str, args: list[str] = None) 
                 env["DISPLAY"] = ":0"
 
             result = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
-            print(f"DEBUG: OpenSCAD stdout: {result.stdout}", file=sys.stderr)
-            print(f"DEBUG: OpenSCAD stderr: {result.stderr}", file=sys.stderr)
+            # Only print errors to avoid cluttering logs
+            if result.returncode != 0:
+                print(f"DEBUG: OpenSCAD failed. Stdout: {result.stdout}", file=sys.stderr)
+                print(f"DEBUG: OpenSCAD failed. Stderr: {result.stderr}", file=sys.stderr)
         except subprocess.CalledProcessError as e:
             print(f"DEBUG: OpenSCAD failed. Stdout: {e.stdout}", file=sys.stderr)
             print(f"DEBUG: OpenSCAD failed. Stderr: {e.stderr}", file=sys.stderr)
@@ -44,30 +45,8 @@ def run_openscad(scad_code: str, output_extension: str, args: list[str] = None) 
         with open(out_path, "rb") as f:
             return f.read()
 
-@mcp.tool()
-def render_views(scad_code: str) -> str:
-    """
-    Renders the OpenSCAD code into a composite image containing 4 views:
-    Top, Front, Right, and Isometric.
-    Returns the image data as a base64 encoded string.
-    """
-    # Define camera rotations for different views
-    # Format: transx,transy,transz,rotx,roty,rotz,distance
-    # We use distance=0 + --autocenter --viewall to handle scaling automatically
-    
-    # Note: OpenSCAD camera logic can be tricky. 
-    # Standard Z-up assumptions:
-    # Top: Looking down Z. rot=(0,0,0)
-    # Front: Looking forward Y (or -Y). rot=(90, 0, 0)
-    # Right: Looking X. rot=(90, 0, 90)
-    # Iso: Diagonal. rot=(60, 0, 45)
-    
-    # Restore 4-view layout with corrected rotations and orthographic projection
-    # Top: 0,0,0
-    # Front: 90,0,0
-    # Right: 90,0,90
-    # Iso: 60,0,45
-    
+def _generate_grid_image(scad_code: str) -> Image.Image:
+    """Helper function to generate the 4-view grid image."""
     common_args = ["--projection=o", "--viewall", "--autocenter"]
     
     views = [
@@ -79,37 +58,46 @@ def render_views(scad_code: str) -> str:
     
     images = []
     
+    for name, args in views:
+        # Generate 500x500 for each view
+        img_bytes = run_openscad(scad_code, "png", args + ["--imgsize=500,500", "--colorscheme=Tomorrow Night"])
+        img = Image.open(io.BytesIO(img_bytes))
+        
+        # Add label
+        draw = ImageDraw.Draw(img)
+        try:
+            font = ImageFont.truetype("DejaVuSans.ttf", 20)
+        except IOError:
+            font = ImageFont.load_default()
+        
+        draw.text((10, 10), name, fill="white", font=font)
+        images.append(img)
+        
+    # Combine images into a 2x2 grid
+    w, h = images[0].size
+    grid_img = Image.new('RGB', (w * 2, h * 2))
+    
+    grid_img.paste(images[0], (0, 0))      # Top
+    grid_img.paste(images[1], (w, 0))      # Front
+    grid_img.paste(images[2], (0, h))      # Right
+    grid_img.paste(images[3], (w, h))      # Iso
+    
+    return grid_img
+
+@mcp.tool()
+def render_views(scad_code: str, output_path: str = "output.png") -> str:
+    """
+    Renders the OpenSCAD code into a composite image containing 4 views:
+    Top, Front, Right, and Isometric.
+    Saves the image directly to the specified output_path (default: output.png).
+    Returns the file path upon success.
+    """
     try:
-        for name, args in views:
-            # Generate 500x500 for each view
-            img_bytes = run_openscad(scad_code, "png", args + ["--imgsize=500,500", "--colorscheme=Tomorrow Night"])
-            img = Image.open(io.BytesIO(img_bytes))
-            
-            # Add label
-            draw = ImageDraw.Draw(img)
-            try:
-                font = ImageFont.truetype("DejaVuSans.ttf", 20)
-            except IOError:
-                font = ImageFont.load_default()
-            
-            draw.text((10, 10), name, fill="white", font=font)
-            images.append(img)
-            
-        # Combine images into a 2x2 grid
-        w, h = images[0].size
-        grid_img = Image.new('RGB', (w * 2, h * 2))
+        grid_img = _generate_grid_image(scad_code)
         
-        grid_img.paste(images[0], (0, 0))      # Top
-        grid_img.paste(images[1], (w, 0))      # Front
-        grid_img.paste(images[2], (0, h))      # Right
-        grid_img.paste(images[3], (w, h))      # Iso
-        
-        # Convert to base64
-        buf = io.BytesIO()
-        grid_img.save(buf, format="PNG")
-        b64_str = base64.b64encode(buf.getvalue()).decode("utf-8")
-        
-        return b64_str
+        # Save directly to file, avoiding base64 overhead
+        grid_img.save(output_path)
+        return f"Visualization saved to {output_path}"
         
     except Exception as e:
         return f"Error rendering views: {str(e)}"
