@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.env
+
+# OpenSCAD generated files
+*.stl
+*.png
+*.gcode
+*.scad
+
+# Editor
+.vscode/
+.idea/
