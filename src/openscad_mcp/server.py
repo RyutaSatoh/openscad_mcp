@@ -46,14 +46,17 @@ def run_openscad(scad_code: str, output_extension: str, args: list[str] = None) 
             return f.read()
 
 def _generate_grid_image(scad_code: str) -> Image.Image:
-    """Helper function to generate the 4-view grid image."""
+    """Helper function to generate the 6-view grid image."""
     common_args = ["--projection=o", "--viewall", "--autocenter"]
     
+    # Define 6 views
     views = [
-        ("Top",   [f"--camera=0,0,0,0,0,0,0"] + common_args),
-        ("Front", [f"--camera=0,0,0,90,0,0,0"] + common_args),
-        ("Right", [f"--camera=0,0,0,90,0,90,0"] + common_args),
-        ("Iso",   [f"--camera=0,0,0,60,0,45,0"] + common_args),
+        ("Top",        [f"--camera=0,0,0,0,0,0,0"] + common_args),
+        ("Bottom",     [f"--camera=0,0,0,180,0,0,0"] + common_args),
+        ("Front",      [f"--camera=0,0,0,90,0,0,0"] + common_args),
+        ("Right",      [f"--camera=0,0,0,90,0,90,0"] + common_args),
+        ("Iso",        [f"--camera=0,0,0,60,0,45,0"] + common_args),
+        ("Iso Bottom", [f"--camera=0,0,0,135,0,45,0"] + common_args),
     ]
     
     images = []
@@ -73,31 +76,44 @@ def _generate_grid_image(scad_code: str) -> Image.Image:
         draw.text((10, 10), name, fill="white", font=font)
         images.append(img)
         
-    # Combine images into a 2x2 grid
-    w, h = images[0].size
-    grid_img = Image.new('RGB', (w * 2, h * 2))
+    # Combine images into a 2x3 grid (2 columns, 3 rows)
+    # Layout:
+    # Top   | Bottom
+    # Front | Right
+    # Iso   | Iso Bottom
     
+    w, h = images[0].size
+    grid_img = Image.new('RGB', (w * 2, h * 3))
+    
+    # Row 1
     grid_img.paste(images[0], (0, 0))      # Top
-    grid_img.paste(images[1], (w, 0))      # Front
-    grid_img.paste(images[2], (0, h))      # Right
-    grid_img.paste(images[3], (w, h))      # Iso
+    grid_img.paste(images[1], (w, 0))      # Bottom
+    
+    # Row 2
+    grid_img.paste(images[2], (0, h))      # Front
+    grid_img.paste(images[3], (w, h))      # Right
+    
+    # Row 3
+    grid_img.paste(images[4], (0, h * 2))  # Iso
+    grid_img.paste(images[5], (w, h * 2))  # Iso Bottom
     
     return grid_img
 
 @mcp.tool()
 def render_views(scad_code: str, output_path: str = "output.png") -> str:
     """
-    Renders the OpenSCAD code into a composite image containing 4 views:
-    Top, Front, Right, and Isometric.
+    Renders the OpenSCAD code into a composite image containing 6 views:
+    Top, Bottom, Front, Right, Isometric, and Isometric Bottom.
+    Ideal for verifying objects like stamps where the bottom view is critical.
     Saves the image directly to the specified output_path (default: output.png).
     Returns the file path upon success.
     """
     try:
         grid_img = _generate_grid_image(scad_code)
         
-        # Save directly to file, avoiding base64 overhead
+        # Save directly to file
         grid_img.save(output_path)
-        return f"Visualization saved to {output_path}"
+        return f"Visualization (6 views) saved to {output_path}"
         
     except Exception as e:
         return f"Error rendering views: {str(e)}"
